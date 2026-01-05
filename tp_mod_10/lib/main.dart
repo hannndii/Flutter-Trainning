@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'db_helper.dart'; 
+import 'db_helper.dart';
 
 void main() {
   runApp(const MyApp());
@@ -13,10 +13,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'TP MOD 10 - SQFlite',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true, 
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
       home: const HomePage(),
     );
   }
@@ -37,7 +34,7 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _descriptionController = TextEditingController();
 
   void _refreshJournals() async {
-    final data = await SQLHelper.readItem();
+    final data = await SQLHelper.readItems();
     setState(() {
       _journals = data;
       _isLoading = false;
@@ -47,18 +44,43 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _refreshJournals(); 
+    _refreshJournals();
   }
 
   Future<void> _addItem() async {
-    await SQLHelper.addItem(
-        _titleController.text, _descriptionController.text);
-    _refreshJournals(); // Refresh list setelah tambah data
+    await SQLHelper.addItem(_titleController.text, _descriptionController.text);
+    _refreshJournals();
   }
 
-  void _showForm(BuildContext context) {
-    _titleController.text = '';
-    _descriptionController.text = '';
+  Future<void> _updateItem(int id) async {
+    await SQLHelper.updateItem(
+      id,
+      _titleController.text,
+      _descriptionController.text,
+    );
+    _refreshJournals();
+  }
+
+  void _deleteItem(int id) async {
+    await SQLHelper.deleteItem(id);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Data berhasil dihapus')));
+    _refreshJournals();
+  }
+
+  void _showForm(BuildContext context, int? id) {
+    if (id != null) {
+      _titleController.text = _journals.firstWhere(
+        (element) => element['id'] == id,
+      )['title'];
+      _descriptionController.text = _journals.firstWhere(
+        (element) => element['id'] == id,
+      )['description'];
+    } else {
+      _titleController.text = '';
+      _descriptionController.text = '';
+    }
 
     showModalBottomSheet(
       context: context,
@@ -75,50 +97,57 @@ class _HomePageState extends State<HomePage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            const Center(
+            Center(
               child: Text(
-                "Tambah Data Baru",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                id == null ? "Tambah Data Baru" : "Edit Data",
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _titleController,
               decoration: const InputDecoration(
-                  hintText: 'Title Data 1', labelText: 'Title', border: OutlineInputBorder()),
+                labelText: 'Title',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _descriptionController,
               decoration: const InputDecoration(
-                  hintText: 'Desc Data 1', labelText: 'Description', border: OutlineInputBorder()),
+                labelText: 'Description',
+                border: OutlineInputBorder(),
+              ),
               maxLines: 3,
             ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[800], 
-                  foregroundColor: Colors.white,
-                ),
                 onPressed: () async {
-                  // Validasi sederhana
-                  if (_titleController.text.isEmpty || _descriptionController.text.isEmpty) {
-                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Isi semua kolom!'),
-                      ));
-                      return;
+                  if (_titleController.text.isEmpty ||
+                      _descriptionController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Isi semua kolom!')),
+                    );
+                    return;
                   }
-                  
-                  await _addItem();
-                  
-                  if(!mounted) return;
+
+                  if (id == null) {
+                    await _addItem();
+                  } else {
+                    await _updateItem(id);
+                  }
+
+                  if (!mounted) return;
                   Navigator.of(context).pop();
                 },
-                child: const Text('Save'),
+                child: Text(id == null ? 'Save' : 'Update'),
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -128,44 +157,56 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('TP MOD 10 - SQFlite'),
-      ),
+      appBar: AppBar(title: const Text('TP MOD 10 - SQFlite')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _journals.isEmpty
-              ? const Center(
-                  child: Text(
-                    "Belum ada data wak 😴",
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
+          ? const Center(
+              child: Text(
+                "Belum ada data wak 😴",
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            )
+          : ListView.builder(
+              itemCount: _journals.length,
+              itemBuilder: (context, index) => Card(
+                color: Colors.white,
+                margin: const EdgeInsets.all(15),
+                child: ListTile(
+                  title: Text(
+                    _journals[index]['title'],
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                )
-              : ListView.builder(
-                  itemCount: _journals.length,
-                  itemBuilder: (context, index) => Card(
-                    color: Colors.white,
-                    margin: const EdgeInsets.all(15),
-                    child: ListTile(
-                      title: Text(
-                        _journals[index]['title'],
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_journals[index]['description']),
+                      const SizedBox(height: 5),
+                      Text(
+                        _journals[index]['createdAt'],
+                        style: TextStyle(fontSize: 10, color: Colors.grey[400]),
                       ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_journals[index]['description']),
-                          const SizedBox(height: 5,),
-                          Text(
-                            _journals[index]['createdAt'],
-                            style: TextStyle(fontSize: 10, color: Colors.grey[400]),
-                          ),
-                        ],
+                    ],
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.orange),
+                        onPressed: () =>
+                            _showForm(context, _journals[index]['id']),
                       ),
-                    ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _deleteItem(_journals[index]['id']),
+                      ),
+                    ],
                   ),
                 ),
+              ),
+            ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showForm(context), 
+        onPressed: () => _showForm(context, null),
         child: const Icon(Icons.add),
       ),
     );
